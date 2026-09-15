@@ -164,7 +164,7 @@ flowchart TD
     E2 --> F
     F --> G[Patient-level Mid-L3 Localization]
     G --> H[Slice Error Evaluation]
-
+'''
 ## 7. Model Architecture
 
 This repository separates the modeling strategy into two parts:
