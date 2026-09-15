@@ -1,43 +1,62 @@
+# CT Mid-L3 Localization with Slice-wise and Local Context Learning
 
-# CT Mid-L3 Localization with Soft Labeling and Local Context Modeling
+This repository provides an implementation of a deep learning-based framework for automatic localization of the mid-third lumbar vertebral level (mid-L3) in axial computed tomography (CT) images.
 
-This repository contains the implementation of a deep learning-based framework for automatic identification of the mid-L3 vertebral level in axial CT images.
+The project is designed around two complementary modeling strategies:
 
-The project focuses on improving mid-L3 localization by combining **distance-aware soft labeling** and **local axial context modeling**. Instead of treating each axial slice only as an independent binary classification target, this study investigates whether anatomical continuity between adjacent CT slices can improve localization performance.
+1. **Slice-wise learning**: each axial CT slice is independently classified using a ResNet-based model.
+2. **Local context learning**: neighboring axial slices are jointly used with a ResNet feature encoder and Transformer-based sequence modeling.
+
+The main objective is to improve mid-L3 slice identification by combining **distance-aware soft labeling** with **local axial context modeling**.
 
 ---
 
+<img width="998" height="1016" alt="image" src="https://github.com/user-attachments/assets/2f8043db-1859-4e5c-b9e3-9b82d67ee633" />
+
+
 ## 1. Background
 
-The third lumbar vertebral level (L3) is widely used as a reference slice for CT-based body composition analysis, including skeletal muscle area, adipose tissue distribution, and sarcopenia-related assessment.
+The third lumbar vertebral level (L3) is widely used as a reference slice for CT-based body composition analysis, including skeletal muscle area and adipose tissue assessment. Manual identification of the mid-L3 slice can be time-consuming and observer-dependent, especially in large-scale retrospective CT studies.
 
-However, manual selection of the mid-L3 slice can be time-consuming and observer-dependent. In large-scale retrospective CT studies, automatic identification of the L3 level can reduce manual workload and improve the reproducibility of downstream body composition analysis.
-
-This project addresses the problem as an axial CT slice-level localization task.
+This project formulates mid-L3 identification as an axial CT slice-level localization problem. Instead of relying only on manual slice selection or full volumetric segmentation, this repository explores practical slice-level classification models that can estimate the mid-L3 slice from a sequence of axial CT images.
 
 ---
 
 ## 2. Project Objective
 
-The main objective of this project is to automatically identify the axial CT slice corresponding to the mid-L3 vertebral level.
+The purpose of this project is to automatically identify the axial CT slice corresponding to the mid-L3 vertebral level.
 
-The project investigates the following questions:
+This repository investigates the following questions:
 
-- Can a CNN-based model identify L3-related axial CT slices from abdominal CT images?
-- Can distance-aware soft labels improve mid-L3 localization compared with binary hard labels?
-- Which soft-labeling function is more suitable for axial mid-L3 localization?
-- Does local context from adjacent axial slices improve localization performance?
+- Can a CNN-based slice-wise model identify L3-related axial CT slices?
+- Can soft labeling improve mid-L3 localization compared with conventional hard labeling?
+- Which soft-labeling function is more suitable for mid-L3 localization?
+- Can local axial context from adjacent slices improve localization performance?
 - How accurately can the predicted mid-L3 slice be localized at the patient level?
 
 ---
 
 ## 3. Dataset
 
-Axial CT slices were generated from volumetric CT data with corresponding vertebral segmentation masks.
+This project uses axial CT slices generated from volumetric CT images and corresponding vertebral segmentation masks.
 
-The L3 vertebral mask was used to determine the ground-truth mid-L3 level. The center axial slice of the L3 vertebra was defined based on the center of gravity of the L3 mask.
+The CT volumes and segmentation masks are provided in NIfTI format. In the vertebral segmentation mask, the L3 vertebral level is represented by label number `22`.
 
-Each saved axial slice was assigned one of the following labels:
+The COLONOG subset of the CTSpine1K dataset was used because it contains the L3 vertebral region. Other subsets were excluded when the anatomical L3 level was not consistently included.
+
+### Dataset split
+
+The dataset was split patient-wise into training, validation, and test sets.
+
+| Split | Ratio |
+|---|---|
+| Train | 60% |
+| Validation | 20% |
+| Test | 20% |
+
+### Slice labels
+
+Each saved axial slice is assigned one of the following labels:
 
 ```text
 L3_mid  : ground-truth mid-L3 slice
@@ -45,9 +64,7 @@ L3      : slice within the L3 vertebral region
 NL3     : non-L3 slice
 ```
 
-Axial slices were sampled at fixed slice intervals to ensure consistent experimental conditions.
-
-Due to data access restrictions, raw CT volumes, segmentation masks, and processed image files are not included in this repository.
+Due to dataset access and redistribution restrictions, raw CT volumes, segmentation masks, and processed image files are not included in this repository.
 
 ---
 
@@ -58,39 +75,55 @@ The preprocessing pipeline consists of the following steps:
 1. Load volumetric CT images and vertebral segmentation masks.
 2. Reorient CT volumes into a consistent anatomical orientation.
 3. Identify the L3 vertebral region from the segmentation mask.
-4. Compute the axial center of gravity of the L3 mask.
+4. Compute the center of gravity of the L3 mask.
 5. Define the nearest saved axial slice as the ground-truth mid-L3 slice.
-6. Save axial CT slices as 2D images at fixed slice intervals.
-7. Assign slice-level labels based on their relationship to the L3 region.
+6. Apply CT intensity windowing.
+7. Resize axial CT slices to a fixed image size.
+8. Save axial slices at fixed intervals along the craniocaudal axis.
+9. Assign hard or soft labels to each saved slice.
 
-The CT images were converted into single-channel axial images and resized for CNN-based training.
+### Image preprocessing settings
+
+| Item | Setting |
+|---|---|
+| Input modality | Axial CT |
+| Image type | Single-channel 2D image |
+| Intensity window | `[-160, 240]` |
+| Input size | `256 × 256` |
+| Slice sampling | Approximately 5 mm interval |
 
 ---
 
 ## 5. Labeling Strategy
 
-Two types of labeling strategies are used in this project.
+Two labeling strategies are supported: **hard labeling** and **soft labeling**.
+
+---
 
 ### 5.1 Hard Labeling
 
-In the hard-label setting, slices are assigned binary labels:
+In the hard-label setting, each axial slice is assigned a binary target.
 
 ```text
-L3_mid / L3 -> 1
-NL3        -> 0
+L3_mid / L3 → 1
+NL3        → 0
 ```
 
-This setting treats all L3 slices as positive samples and all non-L3 slices as negative samples.
+Hard labeling is suitable for binary L3-vs-non-L3 classification. However, it does not explicitly represent how close a slice is to the true mid-L3 location.
 
-Hard labeling is suitable for slice-level L3 classification, but it does not explicitly encode how close each slice is to the true mid-L3 level.
+For example, an axial slice immediately adjacent to the mid-L3 slice and another slice far away from L3 may both be treated simply as `0` or `1`, depending on the binary class definition. This can be suboptimal for localization, where the anatomical distance from the reference slice is important.
+
+---
 
 ### 5.2 Soft Labeling
 
 In the soft-label setting, each slice is assigned a continuous target value according to its distance from the ground-truth mid-L3 slice.
 
-The goal is to provide smoother supervision for localization by giving higher target values to slices closer to the mid-L3 level and lower target values to distant slices.
+Let `d` denote the axial distance from the ground-truth mid-L3 slice.
 
-The following soft-labeling functions are used.
+The goal of soft labeling is to provide distance-aware supervision. Slices close to the mid-L3 level receive higher target values, whereas distant slices receive lower target values.
+
+Three soft-labeling functions are implemented.
 
 #### Gaussian Soft Label
 
@@ -110,24 +143,65 @@ $$
 y = \frac{1}{1 + \exp\left(-\frac{d}{\tau}\right)}
 $$
 
-where $d$ is the axial slice distance from the ground-truth mid-L3 slice. For the Gaussian function, $\sigma$ controls the width of the label distribution. For the Laplace and sigmoid functions, $\tau$ controls the decay or transition scale.
+where `d` is the axial slice distance from the ground-truth mid-L3 slice. For the Gaussian function, `sigma` controls the width of the label distribution. For the Laplace and sigmoid functions, `tau` controls the decay or transition scale.
 
-Gaussian and Laplace labels assign the maximum value at the mid-L3 slice and decrease symmetrically as the distance increases. The sigmoid function provides a monotonic transition across the mid-L3 level.
+Gaussian and Laplace labels assign the maximum value to the mid-L3 slice and decrease symmetrically as the distance increases. The sigmoid function provides a monotonic transition across the mid-L3 level.
 
 ---
 
-## 6. Model Structure
+## 6. Overall Framework
 
-This project includes two main modeling strategies:
+The overall framework consists of the following stages:
 
-1. Slice-wise single-image classification
-2. Local context-based axial sequence modeling
+```mermaid
+flowchart TD
+    A[Volumetric CT + Vertebral Mask] --> B[Preprocessing]
+    B --> C[Axial Slice Generation]
+    C --> D[Hard / Soft Label Assignment]
+    D --> E1[Slice-wise ResNet Model]
+    D --> E2[Local Context ResNet + Transformer Model]
+    E1 --> F[Probability Score Distribution]
+    E2 --> F
+    F --> G[Patient-level Mid-L3 Localization]
+    G --> H[Slice Error Evaluation]
+```
 
-### 6.1 Slice-wise CNN Model
+If Mermaid rendering is not supported in the viewing environment, the same structure can be interpreted as:
 
-The slice-wise baseline model predicts the L3 probability of each axial CT slice independently.
+```text
+CT volume + vertebral mask
+        ↓
+Preprocessing and axial slice generation
+        ↓
+Hard or soft label assignment
+        ↓
+Slice-wise ResNet model / Local context ResNet-Transformer model
+        ↓
+Probability score distribution across axial slices
+        ↓
+Patient-level mid-L3 slice prediction
+        ↓
+Localization error analysis
+```
 
-#### Architecture
+---
+
+## 7. Model Architecture
+
+This repository separates the modeling strategy into two parts:
+
+1. **Slice-wise model**
+2. **Local context model**
+
+---
+
+### 7.1 Slice-wise Model: ResNet-based Single-slice Classification
+
+The slice-wise model independently processes each axial CT slice.
+
+Each slice is treated as a single input image, and the model predicts one output logit for that slice.
+
+#### Structure
 
 ```text
 Input axial CT slice
@@ -143,48 +217,60 @@ Single output logit
 Sigmoid probability during inference
 ```
 
-#### Main Characteristics
+#### Main characteristics
 
-- Backbone: ResNet34
-- Input channel: 1-channel CT image
-- Output: one logit per axial slice
-- Loss function: binary cross-entropy with logits
-- Prediction target: hard label or soft label
+| Component | Description |
+|---|---|
+| Input | One axial CT slice |
+| Backbone | ResNet34 |
+| Input channel | 1-channel CT image |
+| Output | One raw logit per slice |
+| Inference score | Sigmoid probability |
+| Loss | Binary cross-entropy with logits |
+| Training targets | Hard labels or soft labels |
 
-This model does not use neighboring slices. Each axial slice is processed independently.
+#### Purpose
 
-### 6.2 Local Context Model
+The slice-wise model is used as the baseline approach. It evaluates whether the anatomical information contained in a single axial CT slice is sufficient for L3-related classification and mid-L3 localization.
 
-The local context model uses a sequence of adjacent axial CT slices to predict the target slice.
+Because each slice is evaluated independently, this model is computationally simple and efficient. However, it may ignore anatomical continuity across adjacent slices.
 
-This approach is motivated by the anatomical continuity of vertebral structures across neighboring axial slices. Since the L3 level changes gradually along the axial direction, adjacent slices may provide useful context for distinguishing the mid-L3 region.
+---
 
-#### Input Structure
+### 7.2 Local Context Model: ResNet Feature Encoder with Transformer
+
+The local context model extends the slice-wise model by using neighboring axial slices together with the target slice.
+
+Instead of predicting from a single image, the model receives a short axial sequence centered on the target slice.
+
+#### Input sequence
+
+For a target slice at index `t`, the input sequence is defined as:
 
 ```text
 X = [slice t-k, ..., slice t, ..., slice t+k]
 ```
 
-where `slice t` is the center target slice and neighboring slices are used as local anatomical context.
-
-For example, when `T = 9`, the model receives:
+When the sequence length is `T = 9`, the input consists of:
 
 ```text
 4 previous slices + center slice + 4 next slices
 ```
 
-#### Architecture
+The model predicts the label of the center slice while using neighboring slices as local anatomical context.
+
+#### Structure
 
 ```text
 Input axial slice sequence
         ↓
-Shared ResNet34 feature encoder
+Shared 1-channel ResNet34 feature encoder
         ↓
-Slice-level feature tokens
+Slice-level feature vectors
         ↓
-Linear projection to embedding dimension
+Linear projection to embedding space
         ↓
-Relative positional embedding
+Learnable relative positional embedding
         ↓
 Transformer encoder
         ↓
@@ -193,95 +279,164 @@ Center token selection
 Linear prediction head
         ↓
 Single output logit for the center slice
+        ↓
+Sigmoid probability during inference
 ```
 
-#### Main Characteristics
+#### Main characteristics
 
-- Input: sequence of adjacent axial CT slices
-- Sequence length: `T`
-- Shared feature encoder: ResNet34
-- Sequence modeling: Transformer encoder
-- Positional information: learnable relative positional embedding
-- Output: one logit for the center slice
-- Loss function: binary cross-entropy with logits
+| Component | Description |
+|---|---|
+| Input | Sequence of adjacent axial CT slices |
+| Sequence length | `T = 9` |
+| Slice encoder | Shared ResNet34 backbone |
+| Token representation | Slice-level feature tokens |
+| Embedding dimension | 256 |
+| Sequence module | Transformer encoder |
+| Transformer depth | 1 encoder layer |
+| Attention heads | 4 |
+| Feedforward dimension | 512 |
+| Activation | GELU |
+| Positional information | Learnable relative positional embedding |
+| Output | One logit for the center slice |
+| Loss | Binary cross-entropy with logits |
 
-The local context model predicts the label of the center slice while using surrounding slices as contextual information.
+#### Purpose
+
+The local context model is designed to incorporate cranio-caudal anatomical continuity between adjacent CT slices.
+
+This is important because the L3 vertebral level does not appear abruptly in the volume. Its anatomical appearance changes gradually across neighboring slices. By using a local sequence, the model can learn contextual patterns that are not available from a single axial slice alone.
 
 ---
 
-## 7. Training
+## 8. Training Strategy
 
-All models were trained using binary cross-entropy with logits.
+All classification models are trained using binary cross-entropy with logits.
 
-Main training settings:
+### Main training settings
+
+| Setting | Value |
+|---|---|
+| Optimizer | AdamW |
+| Learning rate | `1e-4` |
+| Batch size | 32 |
+| Epochs | 50 |
+| Input size | `256 × 256` |
+| Backbone | ResNet34 |
+| Model selection | Lowest validation loss |
+
+The hard-label and soft-label models are trained independently.
+
+---
+
+## 9. Diffusion-based Data Augmentation
+
+Diffusion-based augmentation is used as a comparative baseline for the hard-label setting.
+
+Two generative models are considered:
+
+- Improved Denoising Diffusion Probabilistic Model (IDDPM)
+- Latent Diffusion Model (LDM)
+
+Synthetic L3 slices generated by diffusion models are combined with real L3 slices to mitigate class imbalance between L3 and non-L3 slices.
+
+The augmentation experiments compare different L3:non-L3 ratios, including:
 
 ```text
-Optimizer      : AdamW
-Learning rate  : 1e-4
-Batch size     : 32
-Epochs         : 50
-Input size     : 256 × 256
-Backbone       : ResNet34
+1:5
+1:3
+1:1
 ```
 
-For hard-label training, binary targets were used.  
-For soft-label training, continuous soft targets were used.
-
-The final model checkpoint was selected based on the lowest validation loss.
+This allows evaluation of whether synthetic L3 samples improve hard-label classification and patient-level localization performance.
 
 ---
 
-## 8. Evaluation
+## 10. Patient-level Mid-L3 Localization
 
-The models were evaluated at both slice level and patient level.
+After slice-level prediction, each patient has a probability score distribution across axial slice numbers.
 
-### 8.1 Slice-level Evaluation
+The final predicted mid-L3 slice is selected from this patient-level probability curve.
 
-For hard-label classification, the following metrics were calculated:
+Different selection rules are used depending on the labeling strategy.
+
+| Labeling strategy | Patient-level localization rule |
+|---|---|
+| Hard label | Fit probability scores using a super-Gaussian-like function |
+| Sigmoid soft label | Select the slice whose probability is closest to 0.5 |
+| Gaussian soft label | Select the slice with the maximum predicted probability |
+| Laplace soft label | Select the slice with the maximum predicted probability |
+
+---
+
+## 11. Evaluation
+
+Evaluation is performed at both slice level and patient level.
+
+### 11.1 Slice-level classification metrics
+
+For hard-label classification, the following metrics are calculated:
 
 - Accuracy
 - Precision
 - Recall
 - F1-score
 
-For soft-label prediction, the predicted probability curve was compared with the soft target curve.
+### 11.2 Patient-level localization metrics
 
-### 8.2 Patient-level Localization
+Patient-level localization is evaluated by comparing the predicted mid-L3 slice number with the ground-truth mid-L3 slice number.
 
-For each patient, the model outputs a probability score for each saved axial slice.
+The localization error is defined as:
 
-The predicted mid-L3 slice is determined from the patient-level prediction curve.
+$$
+\text{signed error} = \text{predicted slice number} - \text{ground-truth slice number}
+$$
 
-Depending on the labeling strategy, the predicted slice can be selected using:
+$$
+\text{absolute error} = |\text{predicted slice number} - \text{ground-truth slice number}|
+$$
 
-- maximum probability
-- closest point to the midpoint of the sigmoid curve
-- fitted probability curve peak
+The mean and standard deviation of absolute slice errors are calculated across patients.
 
-Localization error is calculated as the difference between the predicted mid-L3 slice and the ground-truth mid-L3 slice.
+If axial slices are saved every six original slices, the sampled-slice interval error can be calculated as:
 
-### 8.3 Localization Error
-
-The following error metrics are used:
-
-```text
-Signed error   = predicted slice number - ground-truth slice number
-Absolute error = |predicted slice number - ground-truth slice number|
-```
-
-Errors can be reported in original axial slice units or converted into sampled-slice interval units.
-
-If axial slices are saved every six original slices:
-
-```text
-sampled interval error = original slice number error / 6
-```
-
-The physical distance can also be estimated using slice spacing.
+$$
+\text{sampled interval error} = \frac{\text{original slice number error}}{6}
+$$
 
 ---
 
-## 9. Repository Structure
+## 12. Experimental Settings
+
+The main experimental settings are summarized below.
+
+| Category | Settings |
+|---|---|
+| Labeling strategy | Hard label, soft label |
+| Soft-label function | Sigmoid, Gaussian, Laplace |
+| Slice input strategy | Slice-wise, local context |
+| Slice-wise model | ResNet34 |
+| Local context model | ResNet34 feature encoder + Transformer encoder |
+| Sequence length | T1, T9 |
+| Augmentation | None, IDDPM, LDM |
+| Evaluation | Slice-level classification, patient-level localization |
+
+---
+
+## 13. Key Findings
+
+The main findings of this project can be summarized as follows:
+
+- Soft labeling provides distance-aware supervision for mid-L3 localization.
+- Gaussian and Laplace soft labels are more suitable for symmetric mid-L3 localization because they assign the maximum target value to the mid-L3 slice.
+- Sigmoid soft labeling provides a monotonic transition but does not assign a peak value to the mid-L3 slice.
+- Local context learning allows the model to use anatomical continuity between adjacent axial slices.
+- Patient-level probability score distributions provide useful information for final mid-L3 slice localization.
+- Diffusion-based augmentation can help address L3/non-L3 class imbalance in hard-label classification, but it is computationally more expensive.
+
+---
+
+## 14. Repository Structure
 
 ```text
 .
@@ -290,14 +445,13 @@ The physical distance can also be estimated using slice spacing.
 ├── test_ax.py
 ├── models/
 │   ├── __init__.py
-│   └── axial_models.py
+│   └── ResNet.py
 ├── datasets/
 │   ├── __init__.py
 │   └── axial_dataset.py
-├── utils/
-│   ├── metrics.py
-│   ├── preprocessing.py
-│   └── visualization.py
+├── functions/
+│   ├── __init__.py
+│   └── utils.py
 ├── configs/
 │   └── axial_config.yaml
 ├── checkpoints/
@@ -307,64 +461,41 @@ The physical distance can also be estimated using slice spacing.
 └── requirements.txt
 ```
 
-Some files or directories may be excluded depending on data access and experiment settings.
+Some files or directories may be excluded depending on dataset availability and experiment settings.
 
 ---
 
-## 10. Example Usage
+## 15. Example Usage
 
-### Train Slice-wise Model
-
-```bash
-python train_ax.py
-```
-
-### Evaluate Trained Model
+### Train a slice-wise model
 
 ```bash
-python test_ax.py
+python train_ax.py --model slicewise --target_mode hard
 ```
 
-Example options can be added depending on the experimental configuration:
+### Train a soft-label slice-wise model
 
 ```bash
-python train_ax.py --target_mode soft --soft_type gaussian --context_length 9
+python train_ax.py --model slicewise --target_mode soft --soft_type laplace
 ```
+
+### Train a local context model
+
+```bash
+python train_ax.py --model local_context --target_mode soft --soft_type laplace --context_length 9
+```
+
+### Evaluate a trained model
 
 ```bash
 python test_ax.py --checkpoint checkpoints/best_model.pth
 ```
 
----
-
-## 11. Experimental Settings
-
-The project compares multiple experimental settings:
-
-| Category | Settings |
-|---|---|
-| Labeling strategy | Hard label, soft label |
-| Soft-label function | Gaussian, Laplace, Sigmoid |
-| Local context | Single-slice, local-context sequence |
-| Sequence length | T1, T9 |
-| Backbone | ResNet34 |
-| Evaluation | Slice-level classification, patient-level localization |
+The exact command-line options may vary depending on the local implementation.
 
 ---
 
-## 12. Key Findings
-
-The main findings of this project can be summarized as follows:
-
-- Soft labeling provides distance-aware supervision for mid-L3 localization.
-- Gaussian and Laplace soft labels are suitable for symmetric mid-L3 localization because they assign the maximum target value at the mid-L3 slice.
-- Local context modeling allows the model to use anatomical continuity between adjacent axial slices.
-- Patient-level probability curves can be used to estimate the final mid-L3 slice location.
-- Localization error analysis provides a more direct evaluation of mid-L3 identification than slice-level classification metrics alone.
-
----
-
-## 13. Notes on Data Availability
+## 16. Notes on Data Availability
 
 The CT data used in this project are not included in this repository due to dataset access and redistribution restrictions.
 
