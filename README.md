@@ -164,27 +164,6 @@ flowchart TD
     E2 --> F
     F --> G[Patient-level Mid-L3 Localization]
     G --> H[Slice Error Evaluation]
-```
-
-If Mermaid rendering is not supported in the viewing environment, the same structure can be interpreted as:
-
-```text
-CT volume + vertebral mask
-        ↓
-Preprocessing and axial slice generation
-        ↓
-Hard or soft label assignment
-        ↓
-Slice-wise ResNet model / Local context ResNet-Transformer model
-        ↓
-Probability score distribution across axial slices
-        ↓
-Patient-level mid-L3 slice prediction
-        ↓
-Localization error analysis
-```
-
----
 
 ## 7. Model Architecture
 
