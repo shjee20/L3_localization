@@ -1,4 +1,3 @@
-# L3_localization
 
 # CT Mid-L3 Localization with Soft Labeling and Local Context Modeling
 
