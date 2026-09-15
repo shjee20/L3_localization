@@ -52,7 +52,7 @@ Each saved axial slice was assigned one of the following labels:
 L3_mid  : ground-truth mid-L3 slice
 L3      : slice within the L3 vertebral region
 NL3     : non-L3 slice
-'''
+```
 
 ### Dataset split
 
