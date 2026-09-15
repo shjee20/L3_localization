@@ -38,11 +38,20 @@ This repository investigates the following questions:
 
 ## 3. Dataset
 
-This project uses axial CT slices generated from volumetric CT images and corresponding vertebral segmentation masks.
+This project used the publicly available **CTSpine1K** dataset, which provides volumetric CT images and corresponding vertebral segmentation masks in NIfTI format.
 
-The CT volumes and segmentation masks are provided in NIfTI format. In the vertebral segmentation mask, the L3 vertebral level is represented by label number `22`.
+Among the CTSpine1K subsets, the **COLONOG subset** was used because it contains anatomical L3 vertebral levels. Other subsets were excluded because most cases did not include the L3 level.
 
-The COLONOG subset of the CTSpine1K dataset was used because it contains the L3 vertebral region. Other subsets were excluded when the anatomical L3 level was not consistently included.
+A total of **784 CT volumes** from the COLONOG subset were included in this study. The data were split patient-wise into training, validation, and test sets.
+
+The vertebral segmentation mask was used to identify the L3 vertebral region. In the segmentation mask, the L3 vertebra was represented by label value `22`. The ground-truth mid-L3 slice was determined by calculating the center of gravity of the L3 mask.
+
+Each saved axial slice was assigned one of the following labels:
+
+```text
+L3_mid  : ground-truth mid-L3 slice
+L3      : slice within the L3 vertebral region
+NL3     : non-L3 slice
 
 ### Dataset split
 
