@@ -1,0 +1,31 @@
+# Core deep learning
+torch
+torchvision
+torchaudio
+
+# Data processing
+numpy
+pandas
+scipy
+scikit-learn
+
+# Medical image processing
+nibabel
+SimpleITK
+pydicom
+opencv-python
+Pillow
+
+# Image quality and evaluation
+scikit-image
+torchmetrics
+
+# Visualization
+matplotlib
+seaborn
+
+# Experiment tracking and utilities
+tqdm
+mlflow
+openpyxl
+PyYAML
